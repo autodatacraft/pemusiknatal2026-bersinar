@@ -1,0 +1,12 @@
+{
+  "name": "pemusiknatal2026-bersinar",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Persiapan bersama pelayanan Natal Bersinar 2026",
+  "scripts": {
+    "test": "node --test",
+    "build": "node scripts/check.mjs"
+  },
+  "engines": { "node": ">=22" }
+}
