@@ -10,7 +10,7 @@ create table if not exists public.preparations (
 );
 alter table public.preparations enable row level security;
 revoke all on public.preparations from public, anon, authenticated;
-grant select on public.preparations to service_role;
+grant select, insert on public.preparations to service_role;
 drop policy if exists team_read on public.preparations;
 -- Remove access to the old email RPCs without touching the preparation or Auth users.
 do $$ begin

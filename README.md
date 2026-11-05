@@ -10,6 +10,7 @@ Persiapan bersama pelayanan Natal bertema **Bersinar**. Login menggunakan **satu
 - Data bersama di Supabase melalui API server Vercel; autosave dan pengecekan versi tiap 10 detik saat detail lagu ditutup.
 - Konflik penyimpanan tidak langsung menimpa perubahan rekan. Ekspor perubahan sendiri, muat versi tim, lalu terapkan ulang bagian yang diperlukan.
 - Ekspor/impor cadangan JSON. Impor mengganti dokumen bersama setelah konfirmasi.
+- Jika tabel persiapan masih kosong, API membuat setlist awal otomatis setelah login. Penyisipan memakai `ON CONFLICT DO NOTHING`, sehingga data yang sudah ada tetap dipertahankan meski dua pengguna masuk bersamaan.
 
 ## Deploy baru ke Vercel
 
@@ -33,6 +34,14 @@ Persiapan bersama pelayanan Natal bertema **Bersinar**. Login menggunakan **satu
 3. Deploy ulang branch `main`. Seluruh anggota masuk menggunakan password tim; akun dan daftar email lama tidak digunakan aplikasi lagi. Akun Auth lama tidak dihapus oleh migrasi.
 
 Tidak ada perubahan pada situs Sites lama; repo ini mengatur aplikasi Vercel.
+
+## Jika login berhasil tetapi data belum terbuka
+
+Versi terbaru mengisi setlist awal otomatis bila tabel `preparations` sudah ada tetapi belum mempunyai dokumen `natal2026`. Redeploy commit terbaru lalu muat ulang situs.
+
+Jika masalah tetap ada, periksa pesan spesifik pada halaman dan log Function `api/preparation` di Vercel. Pesan membedakan tabel belum tersedia, izin database belum lengkap, data tidak valid, dan koneksi yang gagal. Log hanya mencatat operasi, status HTTP dan kode error database; tidak mencatat kredensial atau isi persiapan.
+
+Untuk melengkapi tabel, fungsi, izin dan data awal sekaligus, jalankan ulang **`supabase/schema.sql`** di proyek Supabase yang URL-nya digunakan Vercel. Skrip tidak mengganti payload/revision persiapan yang sudah ada. Jangan menghapus tabel atau menonaktifkan RLS.
 
 ## Sesi dan password
 

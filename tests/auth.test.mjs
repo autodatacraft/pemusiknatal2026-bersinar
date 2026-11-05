@@ -99,3 +99,53 @@ test('email authentication and browser database keys are removed',()=>{
   assert.ok(!sync.includes('Authorization'));
   assert.ok(!fs.existsSync(new URL('../api/config.js',import.meta.url)));
 });
+
+test('first login initializes an empty preparation without overwriting concurrent data',async()=>{
+  const cookie=cookieValue(sessionCookie());
+  const payload=JSON.parse(fs.readFileSync(new URL('../supabase/seed.json',import.meta.url),'utf8'));
+  const concurrent=structuredClone(payload);concurrent.songs[0].key='D';
+  let calls=0;
+  global.fetch=async(url,options)=>{
+    calls++;
+    if(calls===1)return {ok:true,json:async()=>[]};
+    if(calls===2){
+      assert.equal(options.method,'POST');
+      assert.equal(options.headers.Prefer,'resolution=ignore-duplicates,return=minimal');
+      assert.equal(options.headers.apikey,process.env.SUPABASE_SECRET_KEY);
+      assert.match(url,/on_conflict=id/);
+      const body=JSON.parse(options.body);
+      assert.equal(body.id,'natal2026');assert.equal(body.revision,0);
+      assert.deepEqual(body.payload,payload);
+      return {ok:true,status:204};
+    }
+    // Another first-login request may have inserted/updated before the refetch.
+    return {ok:true,json:async()=>[{payload:concurrent,revision:1}]};
+  };
+  const res=response();await preparation(request('GET',null,cookie),res);
+  assert.equal(res.statusCode,200);assert.equal(res.body.payload.songs[0].key,'D');
+  assert.equal(res.body.revision,1);assert.equal(calls,3);
+});
+test('existing invalid preparation is reported and never replaced with defaults',async()=>{
+  let calls=0;
+  global.fetch=async()=>{calls++;return {ok:true,json:async()=>[{payload:{invalid:true},revision:8}]};};
+  const res=response();await preparation(request('GET',null,cookieValue(sessionCookie())),res);
+  assert.equal(res.statusCode,503);assert.equal(res.body.code,'PREPARATION_INVALID');assert.equal(calls,1);
+});
+test('missing tables and permissions have actionable errors without leaking backend details',async()=>{
+  const prior=console.error;console.error=()=>{};
+  try {
+    for(const [status,code,expected] of [[404,'PGRST205','DATABASE_SETUP_REQUIRED'],[403,'42501','DATABASE_PERMISSION_DENIED']]){
+      global.fetch=async()=>({ok:false,status,json:async()=>({code,message:'private backend detail'})});
+      const res=response();await preparation(request('GET',null,cookieValue(sessionCookie())),res);
+      assert.equal(res.statusCode,503);assert.equal(res.body.code,expected);
+      assert.ok(!JSON.stringify(res.body).includes('private backend detail'));
+      assert.ok(!JSON.stringify(res.body).includes(process.env.SUPABASE_SECRET_KEY));
+    }
+  }finally{console.error=prior;}
+});
+test('password migration includes initial data and preserves existing rows',()=>{
+  const sql=fs.readFileSync(new URL('../supabase/migrations/002_password_auth.sql',import.meta.url),'utf8');
+  assert.match(sql,/grant select, insert on public\.preparations to service_role/);
+  assert.match(sql,/insert into public\.preparations\(id,payload\)/);
+  assert.match(sql,/on conflict \(id\) do nothing/);
+});
