@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import handler from '../api/config.js';
+
 
 const app = fs.readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
 const domain = app.slice(0, app.indexOf('function render()'));
@@ -21,24 +21,6 @@ test('all five service sections preserve the intended arrangements', () => {
   assert.equal(state.valid({ ...data, songs: [] }), false);
 });
 
-function configResponse() {
-  return { statusCode: 200, setHeader() {}, status(code) { this.statusCode=code; return this; }, json(body) { this.body=body; return this; } };
-}
-test('config endpoint refuses unconfigured projects and secret keys', () => {
-  const old = {...process.env};
-  try {
-    delete process.env.SUPABASE_URL; delete process.env.SUPABASE_PUBLISHABLE_KEY; delete process.env.SUPABASE_ANON_KEY;
-    let res=configResponse(); handler({method:'GET'},res); assert.equal(res.statusCode,503);
-    process.env.SUPABASE_URL='https://example.supabase.co';
-    process.env.SUPABASE_PUBLISHABLE_KEY='sb_secret_do-not-return';
-    res=configResponse(); handler({method:'GET'},res); assert.equal(res.statusCode,503); assert.ok(!JSON.stringify(res.body).includes('sb_secret'));
-    process.env.SUPABASE_PUBLISHABLE_KEY='x.'+Buffer.from(JSON.stringify({role:'service_role'})).toString('base64url')+'.x';
-    res=configResponse(); handler({method:'GET'},res); assert.equal(res.statusCode,503);
-    process.env.SUPABASE_PUBLISHABLE_KEY='sb_publishable_test';
-    res=configResponse(); handler({method:'GET'},res); assert.equal(res.statusCode,200); assert.equal(res.body.key,'sb_publishable_test');
-  } finally { for (const key of Object.keys(process.env)) if (!(key in old)) delete process.env[key]; Object.assign(process.env,old); }
-});
-
 async function syncHarness({ denied=false, conflict=false }={}) {
   const nodes = new Map(), timers=[], calls=[];
   const node = id => nodes.get(id) || nodes.set(id, { textContent:'',hidden:false,disabled:false,children:[],
@@ -53,13 +35,13 @@ async function syncHarness({ denied=false, conflict=false }={}) {
     data:null,selected:null,valid:state.valid,render(){},closeModal(){},
     fetch:async (url,options={})=>{
       calls.push({url,options});
-      if (url==='/api/config') return {ok:true,json:async()=>({url:'https://example.supabase.co',key:'public-test'})};
-      if (url.includes('/rpc/')) {
+      if (url==='/api/auth') return {ok:true,json:async()=>({authenticated:!denied})};
+      if (options.method === 'PUT') {
         if(conflict) return {status:409,ok:false};
-        const b=JSON.parse(options.body);assert.equal(b.p_revision,rev);server=b.p_payload;rev++;
+        const b=JSON.parse(options.body);assert.equal(b.revision,rev);server=b.payload;rev++;
         return {ok:true,json:async()=>({revision:rev})};
       }
-      return {ok:true,json:async()=>denied?[]:[{payload:structuredClone(server),revision:rev}]};
+      return {ok:true,json:async()=>({payload:structuredClone(server),revision:rev})};
     }
   };
   vm.runInNewContext(fs.readFileSync(new URL('../public/sync.js',import.meta.url),'utf8'),context);
@@ -84,13 +66,13 @@ test('conflicting teammate changes stop writes and preserve local edits',async()
   assert.equal(h.getServer().songs[0].key,'');
   assert.equal(h.context.window.bersinarSync.status,'Ada perubahan dari rekan tim');
   assert.equal(h.node('syncbanner').hidden,false);
-  const writes=h.calls.filter(c=>c.url.includes('/rpc/')).length;
+  const writes=h.calls.filter(c=>c.options.method==='PUT').length;
   h.context.window.bersinarSync.queue(h.context.data);await h.timers.at(-1).fn();
-  assert.equal(h.calls.filter(c=>c.url.includes('/rpc/')).length,writes);
+  assert.equal(h.calls.filter(c=>c.options.method==='PUT').length,writes);
 });
-test('nonmembers never reach the preparation editor',async()=>{
+test('visitors without a password session never reach the preparation editor',async()=>{
   const h=await syncHarness({denied:true});
   assert.notEqual(h.node('authgate').hidden,true);
-  assert.match(h.node('authstatus').textContent,/belum mendapat akses/);
+  assert.match(h.node('authstatus').textContent,/Gunakan password/);
   assert.equal(h.context.data,null);
 });

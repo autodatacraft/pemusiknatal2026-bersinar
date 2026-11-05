@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
-for (const path of ['public/index.html', 'public/app.js', 'public/sync.js', 'api/config.js', 'supabase/schema.sql']) {
+for (const path of ['public/index.html', 'public/app.js', 'public/sync.js', 'api/auth.js', 'api/preparation.js', 'lib/server.js', 'lib/password.js', 'lib/validation.js', 'supabase/schema.sql']) {
   if (!existsSync(path)) throw new Error(`Missing ${path}`);
 }
 for (const path of ['public/app.js', 'public/sync.js']) new vm.Script(readFileSync(path, 'utf8'), { filename: path });

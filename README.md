@@ -1,87 +1,72 @@
 # Bersinar — Pemusik Natal 2026
 
-Ruang persiapan bersama untuk tim musik pelayanan Natal bertema **Bersinar**.
-Target repository: **autodatacraft/pemusiknatal2026-bersinar** (private).
+Persiapan bersama pelayanan Natal bertema **Bersinar**. Login menggunakan **satu password tim**. Email, akun anggota, magic link dan SMTP tidak diperlukan.
 
 ## Fitur
 
-- Lima bagian ibadah: Hai Kota Mungil; medley Hai Siarkan + Dari Pulau dan Benua; Hai Mari Berhimpun (kolekte); Yesus Menginginkan Daku (firman); O Holy Night (lilin).
-- Pengaturan nada dasar, tempo, intro, outro, cue dan transisi, serta urutan setlist.
-- Pembagian pemain dan peran piano/keyboard, drum, gitar, bass guitar.
-- Lima checklist tiap lagu, ringkasan kesiapan, catatan keputusan dan daftar hal terbuka.
-- Login melalui tautan email, akses anggota tim melalui allowlist database.
-- Data bersama di Supabase, pembaruan dari rekan diperiksa setiap 10 detik ketika detail lagu ditutup.
-- Autosave dan pemeriksaan revision: perubahan bersamaan tidak langsung menimpa pekerjaan rekan. Jika ada konflik, ekspor perubahan, muat versi tim, lalu terapkan kembali perubahan yang diperlukan.
-- Ekspor/impor JSON untuk cadangan dan migrasi dari versi Sites. Impor mengganti dokumen bersama setelah konfirmasi.
+- Setlist: Hai Kota Mungil; medley Hai Siarkan + Dari Pulau dan Benua; Hai Mari Berhimpun (kolekte); Yesus Menginginkan Daku (firman); O Holy Night (lilin).
+- Nada dasar, tempo, intro, outro, transisi, urutan ibadah, peran piano/keyboard, drum, gitar dan bass.
+- Checklist latihan, ringkasan kesiapan, catatan keputusan dan daftar hal terbuka.
+- Data bersama di Supabase melalui API server Vercel; autosave dan pengecekan versi tiap 10 detik saat detail lagu ditutup.
+- Konflik penyimpanan tidak langsung menimpa perubahan rekan. Ekspor perubahan sendiri, muat versi tim, lalu terapkan ulang bagian yang diperlukan.
+- Ekspor/impor cadangan JSON. Impor mengganti dokumen bersama setelah konfirmasi.
 
-## Deploy ke Vercel
+## Deploy baru ke Vercel
 
-1. Buat proyek Supabase milik sendiri. Jalankan seluruh `supabase/schema.sql` di SQL Editor. Skrip menyertakan setlist awal dan akses koordinator `autodatacraft@gmail.com`; pengulangan tidak menimpa persiapan yang sudah ada.
-2. Di Supabase **Authentication → URL Configuration**, set **Site URL** dan **Redirect URLs** ke URL produksi Vercel yang digunakan. Jika belum punya URL, buat deployment awal lalu lengkapi pengaturan ini sebelum mencoba login. Untuk preview deployment, tambahkan redirect URL yang sesuai juga.
-3. Aktifkan email authentication. Gunakan template Magic Link default yang berisi `{{ .ConfirmationURL }}`. Pengiriman email produksi memerlukan konfigurasi SMTP milik tim dan sender yang valid. Periksa batas pengiriman dan pembatasan penerima pada proyek Supabase; tanpa SMTP kustom, penerima dapat dibatasi.
-4. Di Vercel, **Add New → Project → Import Git Repository**, pilih repo privat ini dan izinkan integrasi Vercel mengakses repo bila diminta. Framework **Other**, build command `npm run build`, output directory `public` (sudah dideklarasikan di `vercel.json`).
-5. Tambahkan environment variables berikut ke lingkungan Production (dan Preview jika diperlukan):
+1. Buat proyek Supabase, lalu jalankan seluruh `supabase/schema.sql` di SQL Editor. Ini membuat database, pembatasan percobaan login dan setlist awal. Pengulangan tidak menimpa data persiapan yang sudah ada.
+2. Impor repo privat `autodatacraft/pemusiknatal2026-bersinar` di Vercel. Framework **Other**, build command `npm run build`, output directory `public` (sudah diatur dalam `vercel.json`).
+3. Tambahkan environment variables server di Vercel:
 
    | Nama | Isi |
    | --- | --- |
-   | `SUPABASE_URL` | URL proyek Supabase, misalnya `https://PROJECT.supabase.co` |
-   | `SUPABASE_PUBLISHABLE_KEY` | Publishable key `sb_publishable_...` |
+   | `SUPABASE_URL` | URL proyek, misalnya `https://PROJECT.supabase.co` |
+   | `SUPABASE_SECRET_KEY` | Secret key Supabase `sb_secret_...` |
 
-   Alternatif proyek lama: gunakan `SUPABASE_ANON_KEY` berisi anon key. **Jangan gunakan `service_role` atau secret key.** Endpoint konfigurasi menolak jenis secret key yang dikenali.
-6. Deploy atau redeploy setelah mengubah variabel. Main branch menjadi sumber deployment produksi; push selanjutnya diproses integrasi Git Vercel.
-7. Buka situs, kirim tautan masuk ke email koordinator, dan uji dua akun anggota dari browser berbeda sebelum membagikan ke seluruh tim.
+   Untuk proyek Supabase lama, gunakan `SUPABASE_SERVICE_ROLE_KEY` berisi legacy service-role JWT sebagai pengganti `SUPABASE_SECRET_KEY`. Kunci ini hanya digunakan server; jangan menggunakan prefix `NEXT_PUBLIC_`, memasukkannya ke HTML/JavaScript browser, atau melakukan commit file `.env`.
+4. Deploy. Buka situs dan masukkan password tim yang telah disepakati. Kode menyimpan hash scrypt dengan salt di modul server, bukan password asli. Tidak ada pengaturan Supabase Auth atau email yang diperlukan.
+5. Bagikan URL situs dan password melalui saluran tim. Setiap orang yang mengetahui password dapat membaca dan mengubah seluruh persiapan.
 
-Saat konfigurasi belum lengkap, editor tidak dibuka dan halaman meminta koordinator menyelesaikan pengaturan. Aplikasi tidak menyimpan persiapan tim secara lokal sebagai pengganti database.
+## Upgrade dari login email
 
-## Tambah atau cabut akses anggota
+1. Jalankan **`supabase/migrations/002_password_auth.sql`** di Supabase SQL Editor. Data persiapan dan revision tetap dipertahankan. Migrasi mencabut akses browser lama dan RPC login email.
+2. Di Vercel, tambahkan `SUPABASE_SECRET_KEY` (atau legacy `SUPABASE_SERVICE_ROLE_KEY`), pertahankan `SUPABASE_URL`, dan hapus variabel `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_ANON_KEY` yang tidak digunakan lagi.
+3. Deploy ulang branch `main`. Seluruh anggota masuk menggunakan password tim; akun dan daftar email lama tidak digunakan aplikasi lagi. Akun Auth lama tidak dihapus oleh migrasi.
 
-Jalankan melalui SQL Editor Supabase (ganti contoh dengan email anggota sebenarnya):
+Tidak ada perubahan pada situs Sites lama; repo ini mengatur aplikasi Vercel.
 
-```sql
-insert into public.team_members(email)
-values (lower('rekan@example.com'))
-on conflict do nothing;
-```
+## Sesi dan password
 
-Untuk mencabut akses:
+- Password diverifikasi di server. Browser hanya menerima cookie sesi bertanda tangan **HttpOnly, Secure, SameSite=Strict** selama 7 hari; password tidak disimpan di browser oleh aplikasi.
+- Tombol **Keluar** menghapus cookie. Mengganti password atau secret key database membatalkan sesi yang sudah diterbitkan.
+- Password default adalah password tim yang disepakati pada pengembangan. Untuk menggantinya, atur environment variable server **`TEAM_PASSWORD`** lalu redeploy. Jangan memasukkan password asli ke repo.
+- Percobaan login dibatasi menjadi 20 per alamat jaringan dalam 15 menit. Counter disimpan di Postgres untuk bekerja lintas instance serverless; alamat jaringan disimpan sebagai fingerprint HMAC.
+- Akses database langsung oleh `anon` dan `authenticated` dicabut. API server memeriksa sesi sebelum membaca/menulis database; secret key Supabase tidak pernah diberikan kepada browser.
 
-```sql
-delete from public.team_members where email = lower('rekan@example.com');
-```
+## Pengembangan dan pengujian
 
-Anggota mendapat akses setelah login dengan email tersebut. Semua anggota allowlist dapat membaca dan mengubah seluruh persiapan; tidak ada pemisahan viewer/editor dalam versi ini. Daftar anggota hanya dapat dikelola melalui database oleh pengelola proyek. Repository privat membatasi akses kode; akses data aplikasi diatur terpisah oleh Supabase Auth dan RLS.
-
-## Migrasi data dari Sites
-
-Pada situs lama klik **Ekspor**, lalu pada aplikasi baru setelah login pilih **Impor** dan setujui penggantian. Jangan memasukkan cadangan persiapan atau kredensial asli ke repository.
-
-## Pengembangan dan pemeriksaan
-
-Tidak ada dependency runtime tambahan. Gunakan Node.js 22 atau lebih baru.
+Gunakan Node.js 22 atau lebih baru. Tidak ada dependency runtime tambahan.
 
 ```sh
 npm test
 npm run build
 ```
 
-Untuk preview aplikasi beserta endpoint konfigurasi gunakan Vercel CLI `vercel dev` setelah mengatur environment lokal sesuai `.env.example`. Menyajikan direktori `public` saja tidak menjalankan `/api/config`.
+Untuk preview beserta endpoint server, gunakan Vercel CLI `vercel dev` dengan environment lokal mengikuti `.env.example`. Cookie sesi memerlukan HTTPS; gunakan preview HTTPS Vercel untuk pengujian browser login lengkap. Menyajikan direktori `public` saja tidak menjalankan API server.
 
-`npm test` memeriksa isi setlist, endpoint konfigurasi, sinkronisasi revision, penanganan konflik, dan penolakan nonanggota dengan mock. Pengujian end-to-end email, kebijakan SQL, dan deployment memerlukan proyek Supabase/Vercel yang dikonfigurasi; belum termasuk dalam pengujian mock.
+Pengujian otomatis mencakup login password, penolakan password salah, sesi kedaluwarsa/tamper, cookie logout, penolakan akses data tanpa sesi, konflik revision, serta penolakan permintaan lintas origin. Pengujian memakai mock database. Eksekusi SQL, pembatasan lintas instance, dan deployment nyata harus diperiksa setelah konfigurasi Supabase/Vercel tersedia.
 
 ## Struktur
 
-- `public/index.html`: tampilan responsif
-- `public/app.js`: alur ibadah dan editor
-- `public/sync.js`: login, sesi, autosave dan konflik
-- `api/config.js`: Vercel Function untuk URL dan public key Supabase
-- `supabase/schema.sql`: tabel, RLS, fungsi simpan, allowlist dan seed
-- `supabase/seed.json`: data awal referensi
-- `tests/project.test.mjs`: pengujian utama
+- `public/`: tampilan dan sinkronisasi frontend
+- `api/auth.js`: login password, pemeriksaan sesi dan logout
+- `api/preparation.js`: baca/simpan dokumen tim dengan pemeriksaan sesi
+- `lib/`: validasi dan kode autentikasi server
+- `supabase/schema.sql`: instalasi baru termasuk seed
+- `supabase/migrations/002_password_auth.sql`: upgrade dari autentikasi email
+- `tests/`: pemeriksaan aplikasi dan endpoint
 
 ## Referensi resmi
 
-- https://vercel.com/docs/deployments/git
-- https://vercel.com/docs/environment-variables
-- https://supabase.com/docs/guides/auth/auth-email-passwordless
-- https://supabase.com/docs/guides/auth/auth-smtp
-- https://supabase.com/docs/guides/database/postgres/row-level-security
+- https://vercel.com/docs/functions/runtimes/node-js
+- https://supabase.com/docs/guides/getting-started/api-keys
+- https://supabase.com/docs/guides/database/secure-data
