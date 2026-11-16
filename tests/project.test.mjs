@@ -21,7 +21,7 @@ test('all five service sections preserve the intended arrangements', () => {
   assert.equal(state.valid({ ...data, songs: [] }), false);
 });
 
-async function syncHarness({ denied=false, conflict=false }={}) {
+async function syncHarness({ conflict=false }={}) {
   const nodes = new Map(), timers=[], calls=[];
   const node = id => nodes.get(id) || nodes.set(id, { textContent:'',hidden:false,disabled:false,children:[],
     replaceChildren(){this.children=[];},append(...x){this.children.push(...x);},addEventListener(){},click(){} }).get(id);
@@ -35,7 +35,6 @@ async function syncHarness({ denied=false, conflict=false }={}) {
     data:null,selected:null,valid:state.valid,render(){},closeModal(){},
     fetch:async (url,options={})=>{
       calls.push({url,options});
-      if (url==='/api/auth') return {ok:true,json:async()=>({authenticated:!denied})};
       if (options.method === 'PUT') {
         if(conflict) return {status:409,ok:false};
         const b=JSON.parse(options.body);assert.equal(b.revision,rev);server=b.payload;rev++;
@@ -50,7 +49,7 @@ async function syncHarness({ denied=false, conflict=false }={}) {
 }
 test('shared sync loads server data, saves against a revision and advances it',async()=>{
   const h=await syncHarness();
-  assert.equal(h.node('authgate').hidden,true);
+  assert.equal(h.calls[0].url,'/api/preparation');
   h.context.data.songs[0].key='G';
   h.context.window.bersinarSync.queue(h.context.data);
   await h.timers.at(-1).fn();
@@ -70,9 +69,8 @@ test('conflicting teammate changes stop writes and preserve local edits',async()
   h.context.window.bersinarSync.queue(h.context.data);await h.timers.at(-1).fn();
   assert.equal(h.calls.filter(c=>c.options.method==='PUT').length,writes);
 });
-test('visitors without a password session never reach the preparation editor',async()=>{
-  const h=await syncHarness({denied:true});
-  assert.notEqual(h.node('authgate').hidden,true);
-  assert.match(h.node('authstatus').textContent,/Gunakan password/);
-  assert.equal(h.context.data,null);
+test('visitors load the editor without authentication requests',async()=>{
+  const h=await syncHarness();
+  assert.ok(h.context.data);
+  assert.ok(h.calls.every(c=>c.url==='/api/preparation'));
 });

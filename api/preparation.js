@@ -1,4 +1,4 @@
-import { authenticated, database, noCache, readBody, sameOrigin } from '../lib/server.js';
+import { database, noCache, readBody, sameOrigin } from '../lib/server.js';
 import { validPreparation } from '../lib/validation.js';
 import initialPreparation from '../supabase/seed.json' with { type: 'json' };
 const READ_PATH = 'preparations?id=eq.natal2026&select=payload,revision';
@@ -20,7 +20,7 @@ async function readPreparation() {
   let rows = await response.json();
   if (!Array.isArray(rows)) throw issue('PREPARATION_INVALID', 'Data persiapan tidak dapat dibaca. Hubungi koordinator.');
   if (!rows.length) {
-    // A fresh password-only migration may have created the table without its seed.
+    // A fresh database may have been created without its seed.
     // Ignore duplicates and read again: a concurrent user's document must never be overwritten.
     response = await database('preparations?on_conflict=id', {
       method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
@@ -40,7 +40,6 @@ async function readPreparation() {
 export default async function handler(req, res) {
   noCache(res);
   if (!['GET','PUT'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
-  if (!authenticated(req)) return res.status(401).json({ error: 'Masuk dengan password tim terlebih dahulu.' });
   if (req.method === 'PUT' && !sameOrigin(req)) return res.status(403).json({ error: 'Permintaan ditolak.' });
   let body;
   if (req.method === 'PUT') {
@@ -60,3 +59,4 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: message, code });
   }
 }
+

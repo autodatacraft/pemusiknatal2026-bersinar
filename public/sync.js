@@ -1,4 +1,4 @@
-/* Shared document with server-verified team password and HttpOnly session. */
+/* Shared document available directly, with revision-based conflict detection. */
 (() => {
   let revision = null, pending = null, generation = 0;
   let saving = false, conflicted = false, timer, polling, ready = false;
@@ -22,7 +22,6 @@
       }; node.append(loadButton);
     }
   }
-  function authMessage(text) { $('authstatus').textContent = text; }
   async function request(path, options = {}) {
     const response = await fetch(path, {
       ...options, credentials: 'same-origin', cache: 'no-store',
@@ -31,7 +30,7 @@
     if (response.status === 409) { const err = new Error('conflict'); err.conflict = true; throw err; }
     if (!response.ok) {
       const result = await response.json().catch(() => ({}));
-      throw new Error(result.error || (response.status === 401 ? 'Sesi berakhir. Ekspor perubahan lalu masuk kembali.' : 'Penyimpanan belum dapat dijangkau. Coba lagi.'));
+      throw new Error(result.error || 'Penyimpanan belum dapat dijangkau. Coba lagi.');
     }
     return response.json();
   }
@@ -71,7 +70,6 @@
   }
   async function start() {
     await fetchDocument(true); ready = true;
-    $('authgate').hidden = true; document.body.classList.remove('auth-pending');
     clearInterval(polling);
     polling = setInterval(async () => {
       if (document.hidden || pending || saving || conflicted || selected) return;
@@ -79,25 +77,6 @@
       catch (e) { status('Koneksi tim terputus'); banner(e.message); }
     }, 10000);
   }
-  $('loginform').addEventListener('submit', async event => {
-    event.preventDefault();
-    $('signin').disabled = true;
-    authMessage('Memeriksa password…');
-    try {
-      await request('/api/auth', { method: 'POST', body: JSON.stringify({ password: $('password').value }) });
-      $('password').value = '';
-      await start();
-    } catch (e) { authMessage(e.message); }
-    finally { $('signin').disabled = false; }
-  });
-  $('logout').onclick = async () => {
-    if ((pending || saving) && !confirm('Ada perubahan yang belum tersimpan. Pilih Batal untuk mengekspor cadangan dahulu, atau OK untuk keluar.')) return;
-    try {
-      await request('/api/auth', { method: 'DELETE' });
-      clearInterval(polling); clearTimeout(timer); ready = false; pending = null;
-      location.replace(location.origin + '/');
-    } catch { banner('Belum dapat keluar. Periksa koneksi dan coba lagi.'); }
-  };
   window.addEventListener('beforeunload', event => {
     if (pending || saving) { event.preventDefault(); event.returnValue = ''; }
   });
@@ -105,16 +84,12 @@
   window.addEventListener('pagehide', () => clearInterval(polling));
   window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
   async function bootstrap() {
-    $('signin').disabled = true;
-    // Remove sessions from the retired email authentication flow.
-    try { localStorage.removeItem('bersinar.auth.v1'); } catch {}
-    if (location.hash) history.replaceState(null, '', location.pathname);
-    try {
-      const result = await request('/api/auth');
-      $('signin').disabled = false;
-      if (result.authenticated) await start();
-      else authMessage('Gunakan password yang dibagikan koordinator tim.');
-    } catch (e) { authMessage(e.message); }
+    try { await start(); }
+    catch (e) {
+      status('Belum tersinkron');
+      banner(e.message + ' Muat ulang halaman untuk mencoba lagi.');
+    }
   }
   bootstrap();
 })();
+
