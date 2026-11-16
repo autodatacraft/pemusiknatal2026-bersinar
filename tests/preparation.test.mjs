@@ -48,6 +48,45 @@ test('missing backend configuration fails closed',async()=>{
   delete process.env.SUPABASE_SECRET_KEY;delete process.env.SUPABASE_SERVICE_ROLE_KEY;
   const res=response();await preparation(request('GET'),res);assert.equal(res.statusCode,503);
 });
+test('configuration failures have safe diagnostic codes without attempting fetch',async()=>{
+  const prior=console.error, logs=[];console.error=(...args)=>logs.push(args);
+  const secret='injected-private-configuration';
+  let calls=0;global.fetch=async()=>{calls++;throw new Error(secret);};
+  try {
+    for(const [url,key,code] of [
+      ['', 'sb_secret_test', 'DATABASE_CONFIG_MISSING'],
+      ['https://example.supabase.co', '', 'DATABASE_CONFIG_MISSING'],
+      [secret, 'sb_secret_test', 'DATABASE_CONFIG_INVALID_URL'],
+      ['http://example.supabase.co', 'sb_secret_test', 'DATABASE_CONFIG_INVALID_URL'],
+      ['https://example.supabase.co', secret, 'DATABASE_CONFIG_INVALID_KEY']
+    ]) {
+      process.env.SUPABASE_URL=url;process.env.SUPABASE_SECRET_KEY=key;
+      delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      logs.length=0;
+      const res=response();await preparation(request('GET'),res);
+      assert.equal(res.statusCode,503);assert.equal(res.body.code,code);
+      assert.deepEqual(logs,[['preparation_database_error',{code}]]);
+      assert.ok(!JSON.stringify([res.body,logs]).includes(secret));
+    }
+    assert.equal(calls,0);
+  }finally{console.error=prior;}
+});
+test('network failures log only allowlisted cause codes, never secret-bearing messages',async()=>{
+  const prior=console.error, logs=[];console.error=(...args)=>logs.push(args);
+  const secret='private-key-url-and-payload';
+  try {
+    for (const cause of ['ENOTFOUND','ECONNREFUSED','CERT_HAS_EXPIRED','UND_ERR_CONNECT_TIMEOUT',secret]) {
+      logs.length=0;
+      global.fetch=async()=>{throw new TypeError(secret,{cause:Object.assign(new Error(secret),{code:cause})});};
+      const res=response();await preparation(request('GET'),res);
+      assert.equal(res.statusCode,503);
+      assert.equal(res.body.code,'DATABASE_CONNECTION_FAILED');
+      const diagnostic=cause===secret?'UNKNOWN':cause;
+      assert.deepEqual(logs,[['preparation_database_error',{code:'DATABASE_CONNECTION_FAILED',cause:diagnostic}]]);
+      assert.ok(!JSON.stringify([res.body,logs]).includes(secret));
+    }
+  } finally {console.error=prior;}
+});
 test('email authentication and browser database keys are removed',()=>{
   const html=fs.readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
   const sync=fs.readFileSync(new URL('../public/sync.js',import.meta.url),'utf8');

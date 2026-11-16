@@ -53,6 +53,21 @@ export default async function handler(req, res) {
     await requireDatabase(response, 'save');
     return res.status(200).json(await response.json());
   } catch (error) {
+    const configurationErrors = {
+      DATABASE_CONFIG_MISSING: 'Konfigurasi database server belum lengkap. Hubungi koordinator.',
+      DATABASE_CONFIG_INVALID_URL: 'URL database server tidak valid. Hubungi koordinator.',
+      DATABASE_CONFIG_INVALID_KEY: 'Jenis kunci database server tidak valid. Hubungi koordinator.'
+    };
+    if (Object.hasOwn(configurationErrors, error?.code)) {
+      console.error('preparation_database_error', { code: error.code });
+      return res.status(503).json({ error: configurationErrors[error.code], code: error.code });
+    }
+    if (error?.code === 'DATABASE_CONNECTION_FAILED') {
+      const allowed = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'CERT_HAS_EXPIRED', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'TIMEOUT'];
+      const cause = allowed.includes(error.diagnosticCause) ? error.diagnosticCause : 'UNKNOWN';
+      console.error('preparation_database_error', { code: 'DATABASE_CONNECTION_FAILED', cause });
+      return res.status(503).json({ error: 'Koneksi database server gagal. Hubungi koordinator.', code: 'DATABASE_CONNECTION_FAILED' });
+    }
     const known = ['DATABASE_SETUP_REQUIRED','DATABASE_PERMISSION_DENIED','DATABASE_UNAVAILABLE','PREPARATION_NOT_INITIALIZED','PREPARATION_INVALID'].includes(error?.code);
     const code = known ? error.code : 'DATABASE_UNAVAILABLE';
     const message = known ? error.message : 'Data tim belum dapat dijangkau. Periksa koneksi atau hubungi koordinator.';
